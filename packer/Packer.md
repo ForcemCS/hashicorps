@@ -239,11 +239,63 @@ $ packer build aws-base-image.pkr.hcl
 
 ![12](./img/12.jpg)
 
-### Packer Templates
+### Writing Packer Templates
 
-#### Block Organization
+#### HCL Syntax
+
+**块组织结构：**
+
+当我们开始编写模板时，我们将拥有要定义的不同的块
 
 + 一般来说，在 Packer 模板中，根块的顺序并不重要，因为 Packer 使用的是声明式模型。对其他资源的引用并不取决于它们的定义顺序。
-+ 块甚至可以跨越多个 Packer 模板文件。
-+ 在构建过程中，provisioner 或post-processor块的顺序是块顺序唯一重要的特征。
++ Packer 允许你在多个文件中定义不同的块，最终 Packer 会合并它们一起解析。
++ 某些块的顺序很重要
+  + **`provisioner`（配置器）块** 和 **`post-processor`（后处理器）块** 需要按顺序执行。
+  + 例如，在 `provisioner` 块中，一个 `shell` 任务需要先安装软件，另一个任务再修改配置文件，那么顺序必须正确，否则可能会失败。
 
+**编写注释：**
+
+提取的文本如下：
+
+- `#` - single line comment
+- `//` - single line comment
+- `/*` and `*/` - start and stop delimiters – might span over multiple lines
+
+**插值语法：**
+
+可以从其他块检索数据
+
+```hcl
+source "amazon-ebs" "amazon-ebs-amazonlinux-2" {  
+  ami_description                = "Vault - Amazon Linux 2"  
+  ami_name                       = "vault-amazonlinux2"  
+  ami_regions                    = ["us-east-1"]  
+  ami_virtualization_type        = "hvm"  
+  associate_public_ip_address    = true  
+  force_delete_snapshot          = true  
+  force_deregister               = true  
+  instance_type                  = "m5.large"  
+  region                         = var.aws_region 
+  //aws特定的AMI
+  source_ami                     = data.amazon-ami.amazon-linux-2.id  
+  tags = {  
+    Name = "HashiCorp Vault"  
+    OS   = "Amazon Linux 2"  
+  }  
+  subnet_id                     = var.subnet_id  
+  vpc_id                        = var.vpc_id  
+}  
+
+build {  
+  sources = ["source.amazon-ebs.amazon-ebs-amazonlinux-2"]  
+  
+  provisioner "file" {  
+    destination = "/tmp/vault.zip"  
+    source      = var.vault_zip  
+  }  
+}
+```
+
+**插件架构：**
+
+例如：在每次构建完镜像后，自动删除一些敏感信息或临时文件，以确保镜像的安全性。你可以开发一个自定义的 Post-processor 插件来实现这个功能。
