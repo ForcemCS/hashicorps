@@ -114,7 +114,7 @@ build {
 + 在构建过程中，HashiCorp Packer 可以使用变量来定义默认值
 + 变量可以声明在 `.pkrvars.hcl` 或 `.auto.pkrvars.hcl` 文件中，也可以存储在其他文件中，只要在执行构建时引用即可。
 
-```json
+```hcl
 variable "image_id" {  
   type        = string  
   description = "The id of the machine image (AMI) to use for the server."  
