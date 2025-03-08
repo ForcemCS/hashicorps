@@ -52,7 +52,7 @@
 + 用来定义要使用哪个初始镜像来创建自定义镜像。
 + 任何已定义的source代码都可在build模块中重复使用。
 
-```hcl
+```json
 source "azure-arm" "azure-arm-centos-7" {
   image_offer      = "CentOS"
   image_publisher  = "OpenLogic"
@@ -68,7 +68,7 @@ source "azure-arm" "azure-arm-centos-7" {
 + build是专为特定平台（如 AWS、Azure、VMware、OpenStack、Docker）开发的插件。 
 + 对镜像所做的一切都是在 BUILD 块内完成的。 
 
-```hcl
+```json
 build {
   source = ["source.azure-arm.azure-arm-centos-7"]
 
@@ -88,7 +88,7 @@ build {
   + chef
   + ....
 
-<img src="./img/13.png" alt="13" style="zoom:40%;" />
+<img src="C:\Users\ForceCS\Desktop\Packer\img\13.png" alt="13" style="zoom:40%;" />
 
 
 
@@ -114,7 +114,7 @@ build {
 + 在构建过程中，HashiCorp Packer 可以使用变量来定义默认值
 + 变量可以声明在 `.pkrvars.hcl` 或 `.auto.pkrvars.hcl` 文件中，也可以存储在其他文件中，只要在执行构建时引用即可。
 
-```hcl
+```json
 variable "image_id" {  
   type        = string  
   description = "The id of the machine image (AMI) to use for the server."  
@@ -299,3 +299,189 @@ build {
 **插件架构：**
 
 例如：在每次构建完镜像后，自动删除一些敏感信息或临时文件，以确保镜像的安全性。你可以开发一个自定义的 Post-processor 插件来实现这个功能。
+
+#### 模板核心组件
+
+##### Source Blocks
+
++ Source blocks定义了用于创建自定义镜像的初始镜像、如何启动镜像以及如何连接镜像。 
+
++ Sources可在多个 builds中使用，并在builder blocks.  中引用。 
+
+示例代码如下
+
+```
+source "amazon-ebs" "ubuntu" {  
+  ami_name      = "ubuntu-image-aws"   # 生成的 AMI 名称  
+  instance_type = "t2.micro"           # 在 AWS 上运行的 EC2 实例类型（t2.micro 是最小的免费实例）  
+  region        = "us-west-2"          # AWS 运行区域（us-west-2 代表俄勒冈）  
+
+  source_ami_filter {  
+    filters = {  
+      name                = "ubuntu/images/*ubuntu-xenial-16.04-amd-server-*"  # 选择 Ubuntu 16.04 Xenial 版本的 AMI  
+      root-device-type    = "ebs"       # 只选择 EBS 作为根存储设备的 AMI  
+      virtualization-type = "hvm"       # 选择 HVM（Hardware Virtual Machine）虚拟化方式  
+    }  
+
+    most_recent = true                  # 选择符合条件的最新 AMI（防止使用过时的版本）  
+    owners      = ["099720109477"]       # 仅从 AWS 官方 Ubuntu 账号（Canonical）筛选 AMI  
+  }
+  ssh_username = "ubuntu"
+}
+```
+
+代码解释：
+
++ 找到一个基础 AMI（通过 source_ami_filter）。
++ 启动 EC2 实例（它的根磁盘是 EBS 卷）。
++ 在 EC2 上做修改（安装软件、修改配置）。
++ 关闭 EC2，并把 EBS 磁盘创建为快照。
++ 基于 EBS 快照创建新的 AMI。
++ 销毁 EC2 实例（它只是构建工具，不需要保留）。
+
+##### Builders
+
++ Build blocks与source blocks配合使用，并定义 Packer 在启动镜像后应如何处理镜像。 
+
+示例代码如下
+
+```
+source "amazon-ebs" "ubuntu" {  
+  ami_name      = "ubuntu-image-aws"  
+  instance_type = "t2.micro"  
+  region        = "us-west-2"  
+
+  source_ami_filter {  
+    filters = {  
+      name                = "ubuntu/images/*ubuntu-xenial-16.04-amd-server-*"  
+      root-device-type    = "ebs"  
+      virtualization-type  = "hvm"  
+    }  
+    most_recent = true  
+    owners      = ["099720109477"]  
+  }  
+
+  ssh_username = "ubuntu"  
+}  
+
+build {                              #如何使用上边的source生成AMI
+  sources {  
+    "source.amazon-ebs.ubuntu"  
+  }  
+}
+```
+
+##### Provisioners
+
+```hcl
+build {  
+  sources = ["sources.googlecompute.debian-build"]  
+
+  provisioner "file" {  
+    destination = "/tmp"  
+    source      = "files"    #将本地 files 目录（位于 Packer 运行的机器上）的内容复制到构建的虚拟机的 /tmp 目录下。
+  }  
+
+  provisioner "shell" {  
+    script = "scripts/setup.sh"  
+  }  
+
+  provisioner "shell" {
+    #inline 允许你在 Packer 模板内直接编写 Shell 命令，而不需要提供外部脚本文件。
+    #直接在目标机器的 ~ 目录（用户主目录）下创建一个 DEPLOYMENT_VERSION 文件，并写入 var.deployment_version 变量的值。
+    inline = ["echo ${var.deployment_version} > ~/DEPLOYMENT_VERSION"]  
+  }  
+}  
+```
+
+##### Post-Processors
+
+用于在 镜像构建完成后 执行额外的操作，比如：
+
++ 优化镜像（如压缩、删除临时文件）
++ 上传镜像（如推送到 AWS AMI、Docker Hub 等）
++ 生成元数据（如创建 JSON 清单）
++ 执行本地命令（如删除构建时的临时文件）
+
+```
+build {  
+  sources {  
+    "source.amazon-ebs.ubuntu"  
+  }  
+
+  post-processor "shell-local" {  
+    inline = ["rm /tmp/script.sh"]  
+  }  
+}  
+```
+
+##### Communicators
+
++ Communicators (通信器)是 Packer 用来与新的构建和上传文件、执行脚本等进行通信的机制
++ 目前有两种通信工具
+  + SSH
+  + WinRM
+  + docker  exec  
+
+我们如何在模板中使用他们，linux中我们不必定义通信器，因为默认是 ssh
+
+示例：
+
+通过 SSH 连接 GCP 实例，并执行配置脚本
+
+```
+hcl复制编辑source "googlecompute" "example" {
+  image_name    = "my-gcp-image"
+  machine_type  = "n1-standard-1"
+  communicator  = "ssh"
+  ssh_username  = "packer"
+  ssh_private_key_file = "/home/user/.ssh/id_rsa"
+}
+```
+
+1. Packer 通过 SSH 连接到 GCP 虚拟机
+
+2. 运行 
+
+   ```
+   setup.sh
+   ```
+
+    脚本，安装 Nginx：
+
+   ```
+   hcl复制编辑provisioner "shell" {
+     inline = ["sudo apt update && sudo apt install -y nginx"]
+   }
+   ```
+
+3. 完成后，Packer 关闭实例，并创建一个可复用的 GCP 镜像。
+
+##### Variables
+
+```
+variable "subnet_id" {  
+  type    = string  
+  default = "subnet-1a2b3c4d5e"  
+}  
+
+variable "region" {  
+  type    = string  
+  default = "us-east-1"  
+}  
+
+source "amazon-ebs" "amazon-linux2" {  
+  ami_name      = local.ami_name  
+  instance_type = "t3.medium"  
+  region        = var.region  
+  source_ami    = data.amazon-ami.amazon-linux.id  
+  ssh_username   = var.ssh_username  
+  subnet_id      = var.subnet_id  
+  tags = {  
+    Name = local.ami_name  
+  }  
+}  
+
+vpc_id = var.vpc_id  
+```
+
