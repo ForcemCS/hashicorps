@@ -52,7 +52,7 @@
 + 用来定义要使用哪个初始镜像来创建自定义镜像。
 + 任何已定义的source代码都可在build模块中重复使用。
 
-```json
+```hcl
 source "azure-arm" "azure-arm-centos-7" {
   image_offer      = "CentOS"
   image_publisher  = "OpenLogic"
@@ -68,7 +68,7 @@ source "azure-arm" "azure-arm-centos-7" {
 + build是专为特定平台（如 AWS、Azure、VMware、OpenStack、Docker）开发的插件。 
 + 对镜像所做的一切都是在 BUILD 块内完成的。 
 
-```json
+```hcl
 build {
   source = ["source.azure-arm.azure-arm-centos-7"]
 
@@ -88,7 +88,7 @@ build {
   + chef
   + ....
 
-<img src="C:\Users\ForceCS\Desktop\Packer\img\13.png" alt="13" style="zoom:40%;" />
+<img src="./img/13.png" alt="13" style="zoom:40%;" />
 
 
 
@@ -114,7 +114,7 @@ build {
 + 在构建过程中，HashiCorp Packer 可以使用变量来定义默认值
 + 变量可以声明在 `.pkrvars.hcl` 或 `.auto.pkrvars.hcl` 文件中，也可以存储在其他文件中，只要在执行构建时引用即可。
 
-```json
+```hcl
 variable "image_id" {  
   type        = string  
   description = "The id of the machine image (AMI) to use for the server."  
