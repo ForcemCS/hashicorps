@@ -8,3 +8,5 @@
 + 流行的builders请[参考](https://developer.hashicorp.com/packer/integrations)
 
 ### AWS AMI
+
+请参考aws-example-1.pkr.hcl
