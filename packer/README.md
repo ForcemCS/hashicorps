@@ -1,5 +1,3 @@
-[TOC]
-
 ## Builders
 
 - Builders 负责为各种平台创建machines并从中提取镜像。
